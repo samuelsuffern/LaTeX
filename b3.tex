@@ -1,0 +1,396 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+
+\usepackage[spanish,es-nodecimaldot]{babel}
+\usepackage[left=2cm,right=2cm,top=2cm,bottom=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage{natbib}
+\usepackage{subfig}
+
+\usepackage[document]{ragged2e}
+\usepackage{graphicx}
+\usepackage{mcode}
+\definecolor{mygreen}{RGB}{0,100,0}
+\usepackage{color}   %May be necessary if you want to color links
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true, %set true if you want colored links
+    linktoc=all,     %set to all if you want both sections and subsections linked
+    linkcolor=blue,  %choose some color if you want links to stand out
+}
+
+\lstset{language=Matlab,%
+    %basicstyle=\color{red},
+    breaklines=true,%
+    morekeywords={matlab2tikz},
+    keywordstyle=\color{blue},%
+    morekeywords=[2]{1}, keywordstyle=[2]{\color{black}},
+    identifierstyle=\color{black},%
+    stringstyle=\color{purple},
+    commentstyle=\color{mygreen},%
+    showstringspaces=false,%without this there will be a symbol in the places where there is a space
+    numbers=left,%
+    numberstyle={\tiny \color{black}},% size of the numbers
+    numbersep=9pt, % this defines how far the numbers are from the text
+    emph=[1]{for,switch,case,end,break},emphstyle=[1]\color{blue}, %some words to emphasise
+    %emph=[2]{word1,word2}, emphstyle=[2]{style},  
+    }
+\begin{document}
+\begin{titlepage}
+\centering
+{\scshape\LARGE Práctica B3 RSI\par}
+	\vspace{1cm}
+	\vspace{1.5cm}
+	{\huge\bfseries Desarrollo de un modelo empírico.
+Cálculo por regresión de un modelo de pérdidas de trayecto \par}
+	\vspace{2cm}
+	{\Large\itshape Samuel John Suffern Sánchez\par}
+	\vfill
+	\vfill
+% Bottom of the page
+	{\large \today\par}
+\end{titlepage}
+
+
+%Indice
+\tableofcontents
+\listoffigures
+\pagebreak
+
+
+
+
+\section{Introducción}
+    \par La señal recibida a través de un canal de propagación radio-móvil tiene superpuestas variaciones de tipo rápido (\textbf{instantáneas}, \(P\) ) y lento (\textbf{media local}, \(P_r\)). Además existen unas variaciones mucho más lentas que dependen de la distancia entre transmisor y receptor (\textbf{perdidas de trayecto y su potencia nominal}, \(P_R\) )
+    \begin{figure}[h]
+        \centering
+        \includegraphics[scale=0.65]{figures_outputs/B3/Received_power_variatons.png}
+        \caption{Slow and fast variations and associated margins}
+        \label{fig:my_label}
+    \end{figure}
+    \par Normalmente la señal nominal decaerá de forma inversamente proporcional a la distancia elevada a un exponente \( \alpha \) que estará en torno a 4, esto es, expresando las potencias en unidades lineales,
+    \begin{equation}
+        \tag{Potencia en unidades lineales}
+        p_R(W) = p_R(d=1)/d^\alpha
+        \label{eq:plineal}
+    \end{equation}
+    \par Es decir, normalmente, la señal caerá con la distancia de forma más acusada que para el caso de espacio libre donde \( \alpha = 2\).
+    \par Al valor nominal para una distancia \(d\), \(p_R\), se llega removiendo, mediante filtrado, las variaciones rápidas en la potencia instantánea, \(p\) y las variaciones lentas, \(p_r \), debidas a efecto sombra, mediante otro filtrado (media local).
+    \par Si expresamos anterior (\ref{eq:plineal}), en unidades logarítmicas:
+    \begin{equation}
+         \tag{Potencia en unidades logarítmicas}
+        p_R(dBW) = p_R(d=1) - 10\alpha log(d)
+        \label{eq:plog}
+    \end{equation}
+    \par Si ahora calculamos \textbf{pérdidas de trayecto (path loss)}, o pérdidas nominales a una distancia d, vemos que tendrá una expresión similar.
+    \begin{equation}
+         \tag{Path loss}
+        L(dB) = L_1(d=1) + 10\alpha log(d)
+        \label{eq:pathloss}
+    \end{equation}
+    \par Por último, para calcular la potencia nominal a una distancia d, utilizamos:
+    \begin{equation}
+         \tag{Potencia nominal a una distancia d}
+        P_R(dBW) = EIRP(dBW) - L(dB) + G_R
+        \label{eq:pnominal}
+    \end{equation}
+    \subsection{Objetivo}
+        \par Tenemos como objetivo en esta práctica, a partir de datos experimentales, extraer los parámetros de un modelo de este tipo. Modelo que predice la potencia nominal a una determinada distancia d.
+\section{Inicio del entorno en Matlab}
+    \par Lo primero que haremos será leer el archivo \mcode{data13.m} que proporcionan unos vectores que se corresponden con un conjunto de parejas de valores de \textbf{distancia d(km) } y \textbf{potencia media $P_r (dBm) $}
+    \begin{lstlisting}
+        load data13
+    \end{lstlisting}
+    \clearpage
+\section{Análisis de los datos experimentales}
+    \par Podemos observar la salida de las medidas tomadas, pero sin filtrar, no podremos distinguir nada.
+    \begin{lstlisting}
+        figure, plot(distkm, Pr');
+        xlabel('Distance in km');ylabel('Measurement Pr')
+    \end{lstlisting}
+    \begin{figure}[h]
+        \centering
+        \includegraphics[scale=0.55]{figures_outputs/B3/data13.eps}
+        \caption{Plot Data13 values ($ P_r $ / distance in km) }
+        \label{fig:my_label}
+    \end{figure}
+\subsection{Ordenación de las muestras}
+    \par Como primer paso vamos a ordenar las muestras en función de la distancia en sentido creciente.
+    \begin{lstlisting}
+        [distkm,I] = sort(distkm);
+        Pr = Pr(I);
+        figure, plot(distkm, Pr, '+r');
+        xlabel('Distance from Tx, km'); ylabel('Low-pas filtered Received power, dBm')
+    \end{lstlisting}
+    \begin{figure}[h]
+        \centering
+        \includegraphics[scale=0.55]{figures_outputs/B3/Received_power_distance_linear.eps}
+        \caption{Gráfico de dispersión \textbf{scatter plot} de los datos en el fichero a analizar}
+        \label{fig:my_label}
+    \end{figure}
+    \clearpage
+    \par En el modelo nos interesa obtener la distancia en unidades logarítmicas, así que aplicamos: $10log(d_{km}) $. También aprovechamos para represental el cálculo de la \textbf{regresión lineal} con \mcode{polyfit} y \mcode{polyval}.
+    \begin{lstlisting}
+        dlog = 10*log10(distkm); % Representación de la distancia en kilómetros
+        figure, hold on; 
+        plot(dlog, Pr, '+g') % Representación de la potencia recibida vs distancia en u. logarítmicas
+        N = 1;
+        P = polyfit(dlog,Pr,N);
+        Prfitted = polyval(P,dlog);
+        plot(dlog, Prfitted, 'r', 'LineWidth', 3)
+        xlabel('10 log_1_0 (d_k_m)')
+        ylabel('Received mean local power, dBm')
+    \end{lstlisting}
+    \begin{figure}[h]
+        \centering
+        \includegraphics[scale=0.55]{figures_outputs/B3/Received_power_distance_log_regresion.eps}
+        \caption{Eje de abscisas en unidades logarítmicas y ajusto de modelo lineal}
+        \label{fig:my_label}
+    \end{figure}
+    \par El modelo/polinommio de \textbf{primer orden} resultante tiene los siguientes parámetros:
+    \begin{lstlisting}
+        disp(['Stright line coefficients: a_1 : ',num2str(P(1)),' and a_0 : ',num2str(P(2))])
+        disp(' ')
+    \end{lstlisting}
+    \begin{verbatim}
+        >> Stright line coefficients: a_1 : -3.7852 and a_0 : -58.709
+    \end{verbatim}
+    \par Es decir:
+    \par \color{blue} \centering P = -3.7852 \hspace{0.1cm }-58.709
+    \par \justify \color{black} Es decir, el modelo que queremos es:
+    \begin{equation}
+        \tag{Modelo}
+        P_R = A - Blog(d_{km}) = A - 10\alpha log(d_{km}) = -58.709 -37.852log(d_{km})
+    \end{equation}
+    \par Donde $ A $ es la potencia a distancia unidad. Si las distancias están en km entonces $ A  $ es la potencia a 1 km. Si las distancias están en m entonces $ P_R$ es la potencia a 1 m. Si $P_R$ está dada en dBm, entonces $A$ también estará en dBm, si $ P_R$ está dada en dBW, A estará en dBW.
+    \par Sobre los valores de la señal nominal se superponen variaciones lentas de carácter gaussiano con media proporcionada por la ecuación anterior y desviación típica, $\sigma_L (dBm) $. La medida proporcionada, $P_r (dBm)$, en el archivo leído, representa la potencia media local, suma de la potencia nominal a una determinada distancia más las variaciones lentas, es decir,
+    \begin{equation}
+        P_r = P_R + X(0,\sigma_l)
+        \label{eqn:aleatoriedad}
+    \end{equation}
+    \par donde $ X(0,\sigma_l) $ se suele modelar como una \textbf{variable gaussiana} de media nula y desviación típica $\sigma_L$
+    
+    \par Normalmente, el primer término del modelo resultante corresponde a la potencia recibida a la distancia de referencia, es decir, 1km en este caso.
+    \clearpage
+    \subsection{Residuos}
+    \par Los residuos se corresponden con la diferencia entre los valores experimentales (\mcode{Pr}) con respecto a los valores obtenidos teóricamente (\mcode{Prfitted}).
+    \par Si representamos los residuos:
+    \begin{lstlisting}
+        X = Pr - Prfitted;
+        figure, plot(dlog, X, 'v')
+        xlabel('10log(d(km))')
+        ylabel('Residuals, dB')
+        
+        figure, plot(distkm, X, 'v') 
+        xlabel('d (km)')
+        ylabel('Residuals, dB')
+    \end{lstlisting}
+    
+    \begin{figure}[h]
+        \centering
+         \begin{subfigure}
+                 \includegraphics[scale=0.55]{figures_outputs/B3/residuos.eps}
+         \end{subfigure}
+         \begin{subfigure}
+                \includegraphics[scale=0.55]{figures_outputs/B3/resuidos_un.eps} 
+         \end{subfigure}
+        \caption{Residuos: Valores medidos - Modelo teórico}
+        \label{fig:my_label}
+    \end{figure}
+    \par Podemos entonces calcular la media y desviación típica de los residuos.
+    \begin{lstlisting}
+        meanX = mean(X);
+        sigmaL = std(X);
+        disp(['Mean and stadard deviation of random variable X:', num2str(meanX),'', num2str(sigmaL)])
+    \end{lstlisting}
+    \begin{verbatim}
+        >> Mean and stadard deviation of random variable X :-1.9568e-14  5.9937
+    \end{verbatim}
+    \par Vamos a verificar que los residuos siguen un modelo gaussiano:
+    \subsubsection{Modelo Gaussiano}
+        \par Para ellos vamos a utilizar la siguiente función en Matlab rescatando el código utilizado de la práctica B2.
+        \begin{lstlisting}
+        function compruebaNormal(signal)
+            Pfilt = signal;
+            % Cálculo media y desviación típica
+            MM = mean(Pfilt);
+            SS = std(Pfilt);
+            % Display the los valores obtenidos
+            disp(['Series mean : ', num2str(MM),' dBm'])
+            disp(['Series std : ', num2str(SS),' dBm'])
+            % --------------------- %
+            N_bins = 80;
+            [a,b] = hist(Pfilt,N_bins);
+            histBin = b(2)-b(1);
+            a = a/length(Pfilt);
+            aa = cumsum(a);
+           
+            % Theoretical distribution
+            Paxis = [min(Pfilt):max(Pfilt)];
+            pdf = 1/(sqrt(2*pi)*SS)*exp(-0.5*((Paxis-MM)/SS).^2);
+            fhist = pdf*histBin;
+            figure, bar(b,a,'y'), hold on, plot(Paxis, fhist,'r', 'LineWidth',2)
+            xlabel('Potecias medias, dBm')
+            ylabel('Probabilidades')
+            F = 1-qfunc((Paxis-MM)/SS);
+            figure, semilogy(b,aa, 'y'), hold on, semilogy(Paxis, F, 'r','LineWidth',2)
+            xlabel('Potecias medias, dBm')
+            ylabel('Probabilidad de no exceder la abscisa')
+        end
+        \end{lstlisting}
+        \par Basta con llamar a la función pasando por argumentos la variable que contiene los residuos: 
+        \begin{lstlisting}
+            compruebaNormal(X)
+        \end{lstlisting}
+        \begin{figure}[h]
+            \centering
+            \begin{subfigure}
+                  \includegraphics[scale=0.55]{figures_outputs/B3/pdf.eps} 
+            \end{subfigure}
+            \begin{subfigure}
+                   \includegraphics[scale=0.55]{figures_outputs/B3/FD.eps}
+            \end{subfigure}
+            \caption{Funciones distribución y densidad de probabilidad teóricas vs medidas de los residuos}
+            \label{fig:my_label}
+        \end{figure}
+        \begin{verbatim}
+            Series mean : -1.9568e-14 dBm
+            Series std : 5.9937 dBm
+        \end{verbatim}
+    \par Como observamos en las gráficas obtenidas, los residuos siguen una distribución Normal.
+    \par Si observamos la función distribución de probabilidad con \mcode{normplot}:
+    \begin{figure}[h]
+        \centering
+        \includegraphics[scale=0.5]{figures_outputs/B3/normplot.eps}
+        \caption{Función distribución con normplot mediante la Statistical Toolbox}
+        \label{fig:my_label}
+    \end{figure}
+    \clearpage
+\section{Generación de datos aleatorios}
+    \par Con las siguientes líneas vamos a intentar generar unos datos aleatorios y simular lo ya realizado.
+    \begin{lstlisting}
+        EIRP=40;%dbm
+        EIRP_dbW= 10;
+        f= 2e9;
+        sigmal = 6;
+        nn = 3.8;
+        GRx= 0;
+        MaxDistKm= 10000;
+        MinDistKm = 100;
+        d= [MinDistKm:9.9:MaxDistKm];
+        d_km = d/1000;
+        L1= 20*log10(4*pi*1000*f/3e8);%perdidas por espacio libre
+        L= L1 + 10*nn*log10(d_km);
+        Pr_dbm = EIRP - L + GRx
+    \end{lstlisting}
+    \par El vector d es un vector 1x1001, se piden 1000 muestras, pero no hemos conseguido hacerlo de otra manera.
+    \par Falta añadir la aleatoriedad a potencia recibida. Sabemos que sigue una distribución normal de media 0 y desviación típica 6. Aplicando entonces la ecuación \ref{eqn:aleatoriedad}:
+    \begin{lstlisting}
+        va = randn(1,1001)*sigmal+0;
+        Pr = Pr_dbm + va;
+    \end{lstlisting}
+    \par En este caso no es necesario ordenar el vector distancias con la potencia, ya que se ha creado de manera ordenada. 
+    \par Si hacemos el plot del vector potencia con respecto a la distancia, quedaría de la siguiente manera:
+    \begin{lstlisting}
+        plot(dkm,Pr,'r');xlabel('Distancia from Tx, km');ylabel('Measurement, Pr')
+    \end{lstlisting}
+    \begin{figure}[h]
+        \centering
+        \includegraphics[scale=0.55]{figures_outputs/B3/scatter_plot2.eps}
+        \caption{Valores de Potencia recibida con respecto a la distancia}
+        \label{fig:my_label}
+    \end{figure}
+    \par Nos interesa la representación logarítmica de la distancia:
+    \begin{lstlisting}
+        dlog = 10*log10(dkm); % Representación de la distancia en kilómetros
+        figure, hold on; 
+        plot(dlog, Pr_dbm, '+g') % Representación de la potencia recibida vs distancia en u. logarítmicas
+        N = 1;
+        P = polyfit(dlog,Pr_dbm,N);
+        Prfitted = polyval(P,dlog);
+        plot(dlog, Prfitted, 'r', 'LineWidth', 3)
+        xlabel('10 log_1_0 (d_k_m)')
+        ylabel('Received mean local power, dBm')
+    \end{lstlisting}
+    \clearpage
+    \begin{figure}[h]
+        \centering
+        \includegraphics[scale=0.55]{figures_outputs/B3/Received_power_distance_log_regresion_2.eps}
+        \caption{Eje de abscisas en unidades logar ́ıtmicas y ajusto de modelo lineal}
+        \label{fig:my_label}
+    \end{figure}
+    \par A diferencia del apartado anterior, la regresión y los valores medidos se aproximan mucho.
+    \par Observando los parámetros del polinimio de primer orden:
+    \begin{lstlisting}
+         disp(['Stright line coefficients: a1 : ',num2str(P(1)),' and a0 : ',num2str(P(2))])
+    \end{lstlisting}
+    \begin{verbatim}
+        >> Stright line coefficients: a1 : -3.8511 and a0 : -57.9402
+    \end{verbatim}
+    \par \color{blue} \centering P = -3.8511 \hspace{0.1cm }-57.9402
+    \par \justify \color{black}
+    \clearpage
+    \subsection{Residuos}
+        \par Representando los residuos, al igual que en el apartado anterior:
+        \begin{lstlisting}
+            X = Pr' - Prfitted;
+            figure, plot(dlog, X, 'v')
+            xlabel('10log(d(km))')
+            ylabel('Residuals, dB')
+            
+            figure, plot(dkm, X, 'v') 
+            xlabel('d (km)')
+            ylabel('Residuals, dB')
+        \end{lstlisting}
+        \begin{figure}[h]
+        \centering
+         \begin{subfigure}
+                 \includegraphics[scale=0.5]{figures_outputs/B3/residuos_2.eps}
+         \end{subfigure}
+         \begin{subfigure}
+                \includegraphics[scale=0.5]{figures_outputs/B3/resuidos_un_2.eps} 
+         \end{subfigure}
+        \caption{Residuos: Valores medidos - Modelo teórico}
+        \label{fig:my_label}
+    \end{figure}
+    \subsubsection{Modelo Gaussiano}
+        \par Faltaría comprobar si estos residuos siguen una distribución normal. Para ello, al igual que en el apartado anterior, utilizaremos la función creada \mcode{compruebaNormal()}
+        \begin{lstlisting}
+            compruebaNormal(X);
+        \end{lstlisting}
+        \begin{figure}[h]
+            \centering
+            \begin{subfigure}
+                  \includegraphics[scale=0.55]{figures_outputs/B3/pdf2.eps} 
+            \end{subfigure}
+            \begin{subfigure}
+                   \includegraphics[scale=0.55]{figures_outputs/B3/FD2.eps}
+            \end{subfigure}
+            \caption{Funciones distribución y densidad de probabilidad teóricas vs medidas de los residuos}
+            \label{fig:my_label}
+        \end{figure}
+        \begin{verbatim}
+            Series mean : -1.4403e-14 dBm
+            Series std : 5.9855 dBm
+        \end{verbatim}    
+        \par Observamos que la media es cero y la desviación típica coincide con 6.
+        \par Por último podemos observar la función distribución de probabilidad con \mcode{normplot}:
+    \begin{figure}[h]
+        \centering
+        \includegraphics[scale=0.5]{figures_outputs/B3/normplot2.eps}
+        \caption{Función distribución con normplot mediante la Statistical Toolbox}
+        \label{fig:my_label}
+    \end{figure}
+\section{Conclusión}
+    \par Para una potencia recibida con variación con la distancia, es posible separar las muestras residuales de la propia muestra de interés.
+    \par Sabiendo que las muestras residuales siguen una distribución gaussiana, somos capaces de separar dichas muestras simplemente restando a la potencia recibida los valores obtenidos teóricamente mediante un modelo de regresión lineal. 
+    \par El resultado de la resta será cuanto es de diferente el valor recibido con el valor real del modelo que debería tener. Esto es precisamente la definición de (\textbf{residuos}).
+    \par Con lo aprendido en la práctica B2, seremos capaces de comprobar si la distribución de estos residuos, de las variaciones lentas, es gaussiana, utilizando en este caso, un filtro rectangular.
+    
+    
+    
+    
+    
+    
+\end{document}
